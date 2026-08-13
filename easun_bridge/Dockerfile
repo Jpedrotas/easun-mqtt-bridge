@@ -13,6 +13,9 @@ COPY run.sh /run.sh
 
 RUN chmod 0755 /run.sh /app/easun_bridge.py
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python3 -c "import socket; socket.create_connection(('127.0.0.1', 18830), 3).close()" || exit 1
+
 CMD ["/run.sh"]
 
 LABEL \

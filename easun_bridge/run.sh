@@ -16,8 +16,10 @@ if ! bashio::var.has_value "$(bashio::services 'mqtt')"; then
     bashio::exit.nok "The Home Assistant MQTT service is unavailable"
 fi
 
-export EASUN_LOCAL_MQTT_USERNAME="$(bashio::services 'mqtt' 'username')"
-export EASUN_LOCAL_MQTT_PASSWORD="$(bashio::services 'mqtt' 'password')"
+EASUN_LOCAL_MQTT_USERNAME="$(bashio::services 'mqtt' 'username')"
+EASUN_LOCAL_MQTT_PASSWORD="$(bashio::services 'mqtt' 'password')"
+export EASUN_LOCAL_MQTT_USERNAME
+export EASUN_LOCAL_MQTT_PASSWORD
 MQTT_HOST="$(bashio::services 'mqtt' 'host')"
 MQTT_PORT="$(bashio::services 'mqtt' 'port')"
 

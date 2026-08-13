@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2] - 2026-08-13
+
+- Replaced the obsolete Home Assistant app watchdog option with a native
+  Docker health check for the local proxy listener.
+- Removed an explicit default configuration key rejected by the current Home
+  Assistant app linter.
+- Corrected shell variable assignment/export handling reported by ShellCheck.
+
 ## [0.3.1] - 2026-08-13
 
 - Added local read-only polling of the confirmed `0x1195` telemetry block every
