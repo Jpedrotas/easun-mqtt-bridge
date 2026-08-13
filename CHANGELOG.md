@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.3] - 2026-08-13
+
+- Clarified intentional IPv4 octet splitting in the OpenWrt helper and made
+  zone-name expansion unambiguous for ShellCheck portability validation.
+
 ## [0.3.2] - 2026-08-13
 
 - Replaced the obsolete Home Assistant app watchdog option with a native

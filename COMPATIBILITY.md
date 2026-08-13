@@ -25,7 +25,7 @@ policy used to distinguish confirmed observations from compatibility inferences.
 | Home Assistant OS | Home Assistant OS | 18.2 | Confirmed during validation |
 | Supervisor | Home Assistant Supervisor | 2026.07.5 | Confirmed during validation |
 | Local MQTT | Official Mosquitto Broker app | 7.1.0 | Confirmed and running during validation |
-| Bridge | EASUN MQTT Bridge | 0.3.2 | Passive proxy and two-second polling confirmed |
+| Bridge | EASUN MQTT Bridge | 0.3.3 | Passive proxy and two-second polling confirmed |
 | Vendor client | Sun House app / Siseli web platform | Exact app and web build versions not recorded | Used to trigger and compare cloud requests |
 
 ## Network infrastructure present during testing

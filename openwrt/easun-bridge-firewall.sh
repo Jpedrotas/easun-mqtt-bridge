@@ -44,6 +44,8 @@ valid_ipv4() {
     esac
     old_ifs="$IFS"
     IFS='.'
+    # Intentional field splitting turns the dotted address into four octets.
+    # shellcheck disable=SC2086
     set -- $value
     IFS="$old_ifs"
     [ "$#" -eq 4 ] || return 1
@@ -61,7 +63,7 @@ valid_port() {
 zone_exists() {
     zone="$1"
     uci show firewall 2>/dev/null |
-        grep -Eq "^firewall\.[^.]+\.name=['\"]?$zone['\"]?$"
+        grep -Eq "^firewall\.[^.]+\.name=['\"]?${zone}['\"]?$"
 }
 
 show_command() {

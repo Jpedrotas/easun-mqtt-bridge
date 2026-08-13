@@ -1,5 +1,5 @@
 name: EASUN MQTT Bridge
-version: "0.3.2"
+version: "0.3.3"
 slug: easun_mqtt_bridge
 description: Local read-only telemetry bridge for EASUN RWB1 dataloggers
 url: https://github.com/jpedrotas/easun-mqtt-bridge

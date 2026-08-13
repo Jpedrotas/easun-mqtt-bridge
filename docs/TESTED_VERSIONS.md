@@ -21,7 +21,7 @@ The protocol investigation and first working redirect were performed with:
 | Home Assistant hardware | Raspberry Pi 4 with 2 GB RAM |
 | Home Assistant architecture/kernel | `rpi4-64` / `aarch64`; `6.18.34-haos-raspi` |
 | Mosquitto Broker app | 7.1.0 |
-| Bridge release | 0.3.2 |
+| Bridge release | 0.3.3 |
 
 The wider test network also included a Vodafone ISP gateway, a TP-Link Deco
 mesh, an Ethernet switch, a TP-Link Archer C6, and a second Archer C20 running
