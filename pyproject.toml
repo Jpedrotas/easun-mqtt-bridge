@@ -1,14 +1,13 @@
 [project]
 name = "easun-mqtt-bridge"
-version = "0.1.0"
-description = "Passive transparent MQTT bridge for EASUN RWB1 dataloggers"
+version = "0.3.1"
+description = "Local read-only telemetry bridge for EASUN RWB1 dataloggers"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "EASUN MQTT Bridge contributors" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Topic :: Home Automation",
 ]

@@ -3,6 +3,10 @@ set -euo pipefail
 
 UPSTREAM_HOST="$(bashio::config 'upstream_host')"
 UPSTREAM_PORT="$(bashio::config 'upstream_port')"
+POLL_INTERVAL="$(bashio::config 'poll_interval')"
+if [[ ! "${POLL_INTERVAL}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    POLL_INTERVAL="2.0"
+fi
 
 if ! bashio::var.has_value "${UPSTREAM_HOST}"; then
     bashio::exit.nok "Configure upstream_host with the vendor MQTT broker address observed on the router"
@@ -24,6 +28,8 @@ ARGS=(
     --upstream-port "${UPSTREAM_PORT}"
     --local-mqtt-host "${MQTT_HOST}"
     --local-mqtt-port "${MQTT_PORT}"
+    --template-cache /data/read-template.json
+    --poll-interval "${POLL_INTERVAL}"
 )
 
 if bashio::config.true 'verbose'; then

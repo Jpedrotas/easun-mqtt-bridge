@@ -1,37 +1,53 @@
 # EASUN MQTT Bridge
 
-Esta aplicação executa um proxy MQTT transparente e passivo para o datalogger
-EASUN Solar Plug-RWB1. A ligação original continua a ser encaminhada para a
-cloud do fabricante e a telemetria confirmada é publicada no Mosquitto local
-através de MQTT Discovery.
+This app runs a transparent MQTT proxy for the EASUN Solar Plug-RWB1
+datalogger. It forwards the original connection to the vendor cloud and
+publishes confirmed telemetry to local Mosquitto using Home Assistant MQTT
+Discovery. It can also poll the confirmed telemetry block locally in read-only
+mode.
 
-## Antes de iniciar
+## Before starting
 
-1. Instale e inicie a aplicação oficial Mosquitto Broker.
-2. Confirme que a integração MQTT do Home Assistant está ativa.
-3. Determine o endereço do broker MQTT usado pelo dongle através de uma captura
-   no router. Não publique a captura nem as credenciais encontradas.
+1. Install and start the official Mosquitto Broker app.
+2. Confirm that the Home Assistant MQTT integration is active.
+3. Determine the MQTT broker address used by the datalogger from a router
+   capture. Never publish that capture or any credentials it contains.
 
-## Opções
+## Options
 
-- `upstream_host`: endereço ou nome do broker MQTT da cloud observado no router.
-- `upstream_port`: porto MQTT da cloud; por defeito `1883`.
-- `verbose`: registo adicional para diagnóstico, sem credenciais nem tópicos
-  completos.
+- `upstream_host`: vendor cloud MQTT broker address or hostname observed on the
+  router.
+- `upstream_port`: vendor MQTT port; defaults to `1883`.
+- `poll_interval`: local telemetry polling interval in seconds. `2.0` is
+  recommended for the tested RWB1; `0` disables local polling.
+- `verbose`: additional diagnostic logging without credentials or complete
+  topics.
 
-## Rede
+## Network
 
-A aplicação escuta no porto TCP `18830` do Home Assistant. O OpenWrt deve
-redirecionar exclusivamente o tráfego do IP do datalogger destinado ao broker
-da cloud. Se o OpenWrt e o Home Assistant estiverem em sub-redes diferentes,
-também é necessário aplicar SNAT/MASQUERADE nesse fluxo para garantir o caminho
-de resposta.
+The app listens on TCP port `18830` of the Home Assistant host. OpenWrt must
+redirect only traffic from the datalogger IP address to the vendor cloud MQTT
+broker. If OpenWrt and Home Assistant are on different subnets, that flow also
+requires SNAT/MASQUERADE to preserve the return path.
 
-Comece sempre com regras temporárias. Só as torne persistentes depois de
-confirmar simultaneamente:
+Start with temporary rules. Make them persistent only after confirming all of
+the following:
 
-- o dongle online na aplicação do fabricante;
-- telemetria no log da aplicação;
-- entidades criadas pela integração MQTT no Home Assistant.
+- the datalogger remains online in the vendor app;
+- telemetry appears in the app log;
+- the MQTT integration creates the Home Assistant entities.
 
-Esta versão não injeta pedidos e não escreve registos do inversor.
+The request envelope required for local polling is learned from a legitimate
+cloud request and stored in the app's private persistent storage. It is never
+logged or committed. Local requests are serialized with cloud requests, and
+their responses are not forwarded to the cloud. The private file may be
+included in app backups, which must be stored securely.
+
+This version never sends Modbus write functions. Local polling is hard-coded to
+the allow-listed telemetry block starting at `0x1195`.
+
+## Full documentation
+
+- [Installation guide](https://github.com/jpedrotas/easun-mqtt-bridge/blob/main/docs/INSTALLATION.md)
+- [Tested versions](https://github.com/jpedrotas/easun-mqtt-bridge/blob/main/docs/TESTED_VERSIONS.md)
+- [Troubleshooting](https://github.com/jpedrotas/easun-mqtt-bridge/blob/main/docs/TROUBLESHOOTING.md)

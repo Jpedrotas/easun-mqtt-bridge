@@ -14,7 +14,9 @@ import base64
 import json
 import logging
 import os
+from pathlib import Path
 import re
+import secrets
 import signal
 import struct
 import time
@@ -24,6 +26,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
+BRIDGE_VERSION = "0.3.1"
 LOGGER = logging.getLogger("easun_bridge")
 MAX_MQTT_PACKET = 1024 * 1024
 
@@ -317,6 +320,24 @@ class ReadRequestTemplate:
     document: dict[str, Any]
     nul_prefixed: bool
 
+    @staticmethod
+    def _fresh_protocol_string(value: str) -> str:
+        """Generate a fresh value while preserving the observed character classes."""
+        generated: list[str] = []
+        for char in value:
+            if char.isdigit():
+                alphabet = "0123456789"
+            elif char.isupper():
+                alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            elif char.islower():
+                alphabet = "abcdefghijklmnopqrstuvwxyz"
+            else:
+                generated.append(char)
+                continue
+            choices = alphabet.replace(char, "")
+            generated.append(secrets.choice(choices))
+        return "".join(generated)
+
     def packet_for(self, register: int, count: int) -> bytes:
         # Only function 03 is constructed here.  The fixed allow-list prevents
         # this mechanism from ever becoming an arbitrary Modbus command path.
@@ -326,12 +347,52 @@ class ReadRequestTemplate:
         frame = frame_without_crc + modbus_crc(frame_without_crc).to_bytes(2, "little")
         document = json.loads(json.dumps(self.document))
         document["b"]["ci"] = base64.b64encode(frame).decode("ascii")
+        # Consecutive legitimate cloud requests keep the remaining scalar fields
+        # stable except for t and s.  Reusing those two values made the RWB1
+        # reject the packet, so issue fresh values with the exact observed shape.
+        for key in ("t", "s"):
+            if isinstance(document.get(key), str):
+                document[key] = self._fresh_protocol_string(document[key])
         payload = json.dumps(document, separators=(",", ":")).encode()
         if self.nul_prefixed:
             payload = b"\x00" + payload
         topic = self.topic.encode()
         body = len(topic).to_bytes(2, "big") + topic + payload
         return bytes((self.header,)) + encode_remaining_length(len(body)) + body
+
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "header": self.header,
+                    "topic": self.topic,
+                    "document": self.document,
+                    "nul_prefixed": self.nul_prefixed,
+                },
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        os.chmod(temporary, 0o600)
+        temporary.replace(path)
+
+    @classmethod
+    def load(cls, path: Path) -> ReadRequestTemplate | None:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            template = cls(
+                header=int(data["header"]),
+                topic=str(data["topic"]),
+                document=data["document"],
+                nul_prefixed=bool(data["nul_prefixed"]),
+            )
+            # Validate shape and allow-list construction before trusting cache.
+            template.packet_for(0x1195, 21)
+            return template
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
 
 
 def read_request_template(packet: bytes) -> ReadRequestTemplate | None:
@@ -357,22 +418,22 @@ def read_request_template(packet: bytes) -> ReadRequestTemplate | None:
 
 
 SENSORS = (
-    SensorDefinition("status_code", "Estado (código)", None, None, None),
-    SensorDefinition("grid_voltage", "Tensão da rede", "V", "voltage", "measurement"),
-    SensorDefinition("grid_frequency", "Frequência da rede", "Hz", "frequency", "measurement"),
-    SensorDefinition("pv_voltage", "Tensão fotovoltaica", "V", "voltage", "measurement"),
-    SensorDefinition("pv_power", "Potência fotovoltaica", "W", "power", "measurement"),
-    SensorDefinition("battery_voltage", "Tensão da bateria", "V", "voltage", "measurement"),
-    SensorDefinition("battery_soc", "Carga da bateria", "%", "battery", "measurement"),
-    SensorDefinition("battery_charge_current", "Corrente de carga da bateria", "A", "current", "measurement"),
-    SensorDefinition("battery_discharge_current", "Corrente de descarga da bateria", "A", "current", "measurement"),
-    SensorDefinition("output_voltage", "Tensão de saída", "V", "voltage", "measurement"),
-    SensorDefinition("output_frequency", "Frequência de saída", "Hz", "frequency", "measurement"),
-    SensorDefinition("load_apparent_power", "Potência aparente da carga", "VA", "apparent_power", "measurement"),
-    SensorDefinition("load_power", "Potência ativa da carga", "W", "power", "measurement"),
-    SensorDefinition("load_percent", "Carga do inversor", "%", None, "measurement"),
-    SensorDefinition("rated_power", "Potência nominal", "W", "power", "measurement"),
-    SensorDefinition("last_telemetry", "Última telemetria", None, "timestamp", None),
+    SensorDefinition("status_code", "Status code", None, None, None),
+    SensorDefinition("grid_voltage", "Grid voltage", "V", "voltage", "measurement"),
+    SensorDefinition("grid_frequency", "Grid frequency", "Hz", "frequency", "measurement"),
+    SensorDefinition("pv_voltage", "PV voltage", "V", "voltage", "measurement"),
+    SensorDefinition("pv_power", "PV power", "W", "power", "measurement"),
+    SensorDefinition("battery_voltage", "Battery voltage", "V", "voltage", "measurement"),
+    SensorDefinition("battery_soc", "Battery state of charge", "%", "battery", "measurement"),
+    SensorDefinition("battery_charge_current", "Battery charge current", "A", "current", "measurement"),
+    SensorDefinition("battery_discharge_current", "Battery discharge current", "A", "current", "measurement"),
+    SensorDefinition("output_voltage", "Output voltage", "V", "voltage", "measurement"),
+    SensorDefinition("output_frequency", "Output frequency", "Hz", "frequency", "measurement"),
+    SensorDefinition("load_apparent_power", "Load apparent power", "VA", "apparent_power", "measurement"),
+    SensorDefinition("load_power", "Load active power", "W", "power", "measurement"),
+    SensorDefinition("load_percent", "Inverter load", "%", None, "measurement"),
+    SensorDefinition("rated_power", "Rated power", "W", "power", "measurement"),
+    SensorDefinition("last_telemetry", "Last telemetry", None, "timestamp", None),
 )
 
 
@@ -459,7 +520,7 @@ class LocalMQTTPublisher:
                 "value_template": "{{ value_json.%s }}" % sensor.key,
                 "origin": {
                     "name": "EASUN MQTT Bridge",
-                    "sw_version": "0.2.1",
+                    "sw_version": BRIDGE_VERSION,
                 },
                 "device": {
                     "identifiers": ["easun_mqtt_bridge"],
@@ -481,12 +542,21 @@ class LocalMQTTPublisher:
 
 
 class TelemetryObserver:
-    def __init__(self, local_publisher: LocalMQTTPublisher | None = None) -> None:
+    def __init__(
+        self,
+        local_publisher: LocalMQTTPublisher | None = None,
+        template_cache: Path | None = None,
+    ) -> None:
         self.local_publisher = local_publisher
         self.latest_state: dict[str, Any] = {}
         self.pending_reads: deque[tuple[int, int, float, bool]] = deque(maxlen=32)
-        self.read_template: ReadRequestTemplate | None = None
+        self.template_cache = template_cache
+        self.read_template = ReadRequestTemplate.load(template_cache) if template_cache else None
+        if self.read_template is not None:
+            LOGGER.info("Loaded private local request template cache")
         self.one_shot_attempted = False
+        self.local_read_count = 0
+        self.last_local_health_log = 0.0
         self.previous_request_scalars: dict[str, Any] | None = None
 
     def packet(self, direction: str, packet: bytes) -> bool:
@@ -501,7 +571,8 @@ class TelemetryObserver:
         frames = extract_modbus_frames(payload)
         if not frames:
             return False
-        LOGGER.info("MQTT %s: %d valid Modbus frame(s) on %s", direction, len(frames), safe_topic(topic))
+        packet_log = LOGGER.debug if direction == "downstream" and self.has_pending_local_read() else LOGGER.info
+        packet_log("MQTT %s: %d valid Modbus frame(s) on %s", direction, len(frames), safe_topic(topic))
         if direction == "upstream":
             nul_prefixed, paths = modbus_frame_paths(payload)
             LOGGER.info(
@@ -524,6 +595,12 @@ class TelemetryObserver:
             template = read_request_template(packet)
             if template is not None:
                 self.read_template = template
+                if self.template_cache:
+                    try:
+                        template.save(self.template_cache)
+                        LOGGER.info("Updated private local request template cache")
+                    except OSError:
+                        LOGGER.exception("Could not update private request template cache")
         return suppress
 
     def _observe_frame(self, direction: str, frame: bytes) -> bool:
@@ -538,12 +615,24 @@ class TelemetryObserver:
                 local_read = False
             else:
                 correlated_register, local_read = correlation
-                LOGGER.info(
-                    "Modbus read response: register=0x%04X words=%s source=%s",
-                    correlated_register,
-                    words,
-                    "local" if local_read else "cloud",
-                )
+                if local_read:
+                    self.local_read_count += 1
+                    now = time.monotonic()
+                    if now - self.last_local_health_log >= 60:
+                        LOGGER.info(
+                            "Local telemetry polling healthy: responses=%d words=%d",
+                            self.local_read_count,
+                            len(words),
+                        )
+                        self.last_local_health_log = now
+                    else:
+                        LOGGER.debug("Local Modbus read response: words=%d", len(words))
+                else:
+                    LOGGER.info(
+                        "Cloud Modbus read response: register=0x%04X words=%s",
+                        correlated_register,
+                        words,
+                    )
             if len(words) == 21:
                 self.latest_state.update(
                     {
@@ -592,6 +681,10 @@ class TelemetryObserver:
         now = time.monotonic()
         return any(local and now - created <= 10 for _, _, created, local in self.pending_reads)
 
+    def has_pending_read(self) -> bool:
+        now = time.monotonic()
+        return any(now - created <= 10 for _, _, created, _ in self.pending_reads)
+
     def _match_pending_read(self, word_count: int) -> tuple[int, bool] | None:
         now = time.monotonic()
         while self.pending_reads and now - self.pending_reads[0][2] > 10:
@@ -623,7 +716,7 @@ async def handle_client(
     upstream_host: str,
     upstream_port: int,
     observer: TelemetryObserver,
-    poll_interval: int | None,
+    poll_interval: float | None,
 ) -> None:
     peer = downstream_writer.get_extra_info("peername")
     LOGGER.info("Datalogger connection accepted from %s", peer[0] if peer else "unknown")
@@ -656,7 +749,9 @@ async def handle_client(
         # Let the original cloud request complete before the first local read.
         await asyncio.sleep(2.0)
         while not downstream_writer.is_closing():
-            if not observer.has_pending_local_read():
+            # Responses omit the requested start register. Serialise reads so a
+            # vendor response can never be mistaken for a local response.
+            if not observer.has_pending_read():
                 packet = observer.read_template.packet_for(0x1195, 21)
                 if poll_interval == 0:
                     observer.one_shot_attempted = True
@@ -664,7 +759,7 @@ async def handle_client(
                 async with downstream_lock:
                     downstream_writer.write(packet)
                     await downstream_writer.drain()
-                LOGGER.info("Active read-only telemetry request sent")
+                LOGGER.debug("Active read-only telemetry request sent")
             if poll_interval == 0:
                 return
             await asyncio.sleep(poll_interval)
@@ -696,16 +791,22 @@ async def run(args: argparse.Namespace) -> None:
         )
         await local_publisher.connect()
         LOGGER.info("Connected to local MQTT broker")
-    observer = TelemetryObserver(local_publisher)
+    template_cache = Path(args.template_cache) if args.template_cache else None
+    observer = TelemetryObserver(local_publisher, template_cache)
     server = await asyncio.start_server(
         lambda reader, writer: handle_client(
-            reader, writer, args.upstream_host, args.upstream_port, observer, None
+            reader,
+            writer,
+            args.upstream_host,
+            args.upstream_port,
+            observer,
+            0 if args.validation_probe else (args.poll_interval if args.poll_interval > 0 else None),
         ),
         args.listen_host,
         args.listen_port,
     )
     addresses = ", ".join(str(sock.getsockname()) for sock in server.sockets or [])
-    LOGGER.info("Safe passive proxy listening on %s", addresses)
+    LOGGER.info("Read-only telemetry proxy listening on %s", addresses)
     try:
         async with server:
             await server.serve_forever()
@@ -726,7 +827,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--upstream-port", type=int, default=1883)
     parser.add_argument("--local-mqtt-host")
     parser.add_argument("--local-mqtt-port", type=int, default=1883)
+    parser.add_argument("--template-cache")
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=0,
+        help="seconds between local read-only telemetry requests; 0 disables polling",
+    )
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--validation-probe", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 

@@ -1,31 +1,47 @@
 # Changelog
 
-Todas as alterações relevantes deste projeto serão documentadas neste ficheiro.
+All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [0.3.1] - 2026-08-13
 
-### Alterado
+- Added local read-only polling of the confirmed `0x1195` telemetry block every
+  two seconds, with request serialization and suppression of local responses
+  before cloud forwarding.
+- Stored the private protocol envelope in `/data`, the app's private persistent
+  storage, with restricted permissions. It is never committed or logged.
+- Added `poll_interval`; setting it to `0` disables local polling.
+- Rate-limited periodic health messages to reduce unnecessary storage writes.
+- Added a complete Home Assistant and OpenWrt installation guide, a reversible
+  firewall4/UCI helper, version-difference notes, rollback steps, and a
+  troubleshooting matrix.
+- Added a hardware/software/firmware inventory and compatibility matrix that
+  distinguishes confirmed, inferred, unknown, and replacement-router versions.
+- Added a traceable source catalogue covering standards, official Home Assistant
+  and OpenWrt documentation, hardware references, pinned interoperability
+  project revisions, and the private-evidence policy.
 
-- Diagnóstico estrutural seguro do envelope MQTT para preparar futuras
-  consultas Modbus exclusivamente de leitura, sem registar conteúdo,
-  identificadores ou credenciais.
-- Diagnóstico de interoperabilidade confirmou que os pedidos remotos incluem
-  dois valores alfanuméricos variáveis gerados pela cloud. O ensaio de uma
-  consulta local foi rejeitado pelo RWB1 e a opção experimental foi retirada
-  da configuração para impedir ativação acidental.
+## [0.2.1] - 2026-08-12
 
-### Adicionado
+### Changed
 
-- Proxy MQTT transparente e passivo para o datalogger Solar Plug-RWB1.
-- Descodificação dos blocos Modbus RTU confirmados e publicação por MQTT
-  Discovery.
-- Aplicação para Home Assistant OS com ligação automática ao serviço Mosquitto.
-- Mapa de registos com níveis de confiança e matriz de compatibilidade.
-- Testes unitários, verificação de sintaxe e CI.
+- Added safe structural diagnostics for the MQTT envelope without logging
+  content, identifiers, or credentials.
+- Confirmed that cloud requests contain two varying alphanumeric values. An
+  initial local-read experiment was rejected by the RWB1, so the experimental
+  option was removed until the envelope behavior was understood.
 
-### Segurança
+## [0.1.0] - 2026-08-12
 
-- Credenciais MQTT do dongle nunca são registadas.
-- Identificadores específicos do equipamento são ocultados nos tópicos dos
-  logs.
-- Esta versão não permite injeção de pedidos nem escrita Modbus.
+### Added
+
+- Transparent passive MQTT proxy for the Solar Plug-RWB1 datalogger.
+- Decoding of confirmed Modbus RTU blocks and Home Assistant MQTT Discovery.
+- Home Assistant OS app with automatic Mosquitto service integration.
+- Register map with confidence levels and a compatibility matrix.
+- Unit tests, syntax validation, and continuous integration.
+
+### Security
+
+- Datalogger MQTT credentials were never logged.
+- Device-specific identifiers were redacted from logged MQTT topics.
+- This version did not inject requests or implement Modbus writes.

@@ -20,5 +20,5 @@ LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
     org.opencontainers.image.title="Home Assistant App: EASUN MQTT Bridge" \
-    org.opencontainers.image.description="Passive transparent MQTT bridge for EASUN RWB1 dataloggers" \
+    org.opencontainers.image.description="Local read-only telemetry bridge for EASUN RWB1 dataloggers" \
     org.opencontainers.image.licenses="MIT"

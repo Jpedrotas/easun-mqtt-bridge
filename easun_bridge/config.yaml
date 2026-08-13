@@ -1,13 +1,15 @@
 name: EASUN MQTT Bridge
-version: "0.2.1"
+version: "0.3.1"
 slug: easun_mqtt_bridge
-description: Passive transparent MQTT bridge for EASUN RWB1 dataloggers
+description: Local read-only telemetry bridge for EASUN RWB1 dataloggers
+url: https://github.com/jpedrotas/easun-mqtt-bridge
 arch:
   - aarch64
   - amd64
 init: false
 startup: services
 boot: auto
+stage: experimental
 watchdog: tcp://[HOST]:18830
 services:
   - mqtt:need
@@ -18,8 +20,10 @@ ports_description:
 options:
   upstream_host: ""
   upstream_port: 1883
+  poll_interval: 2.0
   verbose: false
 schema:
   upstream_host: str
   upstream_port: port
+  poll_interval: float(0,60)
   verbose: bool

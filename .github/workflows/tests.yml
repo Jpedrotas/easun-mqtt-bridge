@@ -20,3 +20,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m unittest -v
       - run: python -m py_compile easun_bridge/easun_bridge.py
+      - if: matrix.python-version == '3.13'
+        run: |
+          bash -n easun_bridge/run.sh
+          bash -n openwrt/easun-bridge-firewall.sh
+          shellcheck -s bash easun_bridge/run.sh
+          shellcheck -s sh openwrt/easun-bridge-firewall.sh

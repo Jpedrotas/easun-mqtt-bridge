@@ -1,10 +1,14 @@
 import base64
 import json
+import time
+import tempfile
 import unittest
+from pathlib import Path
 
 from easun_bridge.easun_bridge import (
     MQTTStreamParser,
     TelemetryObserver,
+    ReadRequestTemplate,
     decode_publish,
     encode_remaining_length,
     extract_modbus_frames,
@@ -127,7 +131,12 @@ class BridgeTests(unittest.TestCase):
     def test_allowlisted_read_packet_uses_captured_envelope(self):
         original = with_crc(bytes.fromhex("05 03 11 D1 00 01"))
         payload = b"\x00" + json.dumps(
-            {"request": "kept-in-memory", "b": {"ci": base64.b64encode(original).decode()}}
+            {
+                "t": "Ab3xYz90",
+                "s": "9aBcD2eF7",
+                "request": "kept-in-memory",
+                "b": {"ci": base64.b64encode(original).decode()},
+            }
         ).encode()
         template = read_request_template(publish("dtu/private/sub/service/dev_rpc", payload))
         self.assertIsNotNone(template)
@@ -138,6 +147,11 @@ class BridgeTests(unittest.TestCase):
             [with_crc(bytes.fromhex("05 03 11 95 00 15"))],
             extract_modbus_frames(generated_payload),
         )
+        generated_document = json.loads(generated_payload.lstrip(b"\x00"))
+        self.assertRegex(generated_document["t"], r"[A-Z][a-z]\d[a-z][A-Z][a-z]\d\d")
+        self.assertRegex(generated_document["s"], r"\d[a-z][A-Z][a-z][A-Z]\d[a-z][A-Z]\d")
+        self.assertNotEqual("Ab3xYz90", generated_document["t"])
+        self.assertNotEqual("9aBcD2eF7", generated_document["s"])
 
     def test_arbitrary_active_read_is_rejected(self):
         original = with_crc(bytes.fromhex("05 03 11 D1 00 01"))
@@ -145,6 +159,27 @@ class BridgeTests(unittest.TestCase):
         template = read_request_template(publish("safe/topic", payload))
         with self.assertRaises(ValueError):
             template.packet_for(0x138C, 1)
+
+    def test_pending_cloud_read_blocks_local_poll(self):
+        observer = TelemetryObserver()
+        observer.pending_reads.append((0x11D1, 1, time.monotonic(), False))
+        self.assertTrue(observer.has_pending_read())
+
+    def test_expired_read_does_not_block_local_poll(self):
+        observer = TelemetryObserver()
+        observer.pending_reads.append((0x11D1, 1, time.monotonic() - 11, False))
+        self.assertFalse(observer.has_pending_read())
+
+    def test_private_template_cache_round_trip(self):
+        original = with_crc(bytes.fromhex("05 03 11 D1 00 01"))
+        payload = json.dumps({"b": {"ci": base64.b64encode(original).decode()}}).encode()
+        template = read_request_template(publish("safe/topic", payload))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "template.json"
+            template.save(path)
+            loaded = ReadRequestTemplate.load(path)
+        self.assertEqual(template.topic, loaded.topic)
+        self.assertEqual(template.document, loaded.document)
 
 
 if __name__ == "__main__":
