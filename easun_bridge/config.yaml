@@ -2,7 +2,6 @@ name: EASUN MQTT Bridge
 version: "0.1.0"
 slug: easun_mqtt_bridge
 description: Passive transparent MQTT bridge for EASUN RWB1 dataloggers
-url: https://github.com/OWNER/easun-mqtt-bridge
 arch:
   - aarch64
   - amd64
