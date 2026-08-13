@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.pcap
+*.pcapng
+*.log
+.env
+.venv/
+venv/
+captures/
+secrets.*

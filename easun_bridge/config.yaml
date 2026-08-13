@@ -1,0 +1,26 @@
+name: EASUN MQTT Bridge
+version: "0.1.0"
+slug: easun_mqtt_bridge
+description: Passive transparent MQTT bridge for EASUN RWB1 dataloggers
+url: https://github.com/OWNER/easun-mqtt-bridge
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+boot: auto
+watchdog: tcp://[HOST]:18830
+services:
+  - mqtt:need
+ports:
+  18830/tcp: 18830
+ports_description:
+  18830/tcp: Transparent MQTT proxy for the datalogger
+options:
+  upstream_host: ""
+  upstream_port: 1883
+  verbose: false
+schema:
+  upstream_host: str
+  upstream_port: port
+  verbose: bool
