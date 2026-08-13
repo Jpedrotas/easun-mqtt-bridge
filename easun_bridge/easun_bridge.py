@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Transparent MQTT proxy and passive EASUN telemetry decoder.
+"""Transparent MQTT proxy and EASUN telemetry decoder.
 
 The datalogger connection is forwarded byte-for-byte to the vendor broker.  The
 observer never logs MQTT credentials or the device-specific part of a topic.
-Only read-only telemetry is decoded; this version does not inject commands.
+Optional active polling is restricted to one confirmed read-only register block.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import base64
 import json
 import logging
 import os
+import re
 import signal
 import struct
 import time
@@ -144,6 +145,150 @@ def extract_modbus_frames(payload: bytes) -> list[bytes]:
     return frames
 
 
+def modbus_frame_paths(payload: bytes) -> tuple[bool, list[str]]:
+    """Return only safe structural locations of valid Modbus frames.
+
+    Values, identifiers and the original JSON are deliberately not returned so
+    this diagnostic can be enabled without leaking device-specific data.
+    """
+    nul_prefixed = payload.startswith(b"\x00")
+    try:
+        document = json.loads(payload.lstrip(b"\x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return nul_prefixed, []
+    container = document.get("b")
+    if not isinstance(container, dict):
+        return nul_prefixed, []
+
+    candidates: list[tuple[str, Any]] = [
+        ("b.ci", container.get("ci")),
+        ("b.co", container.get("co")),
+    ]
+    reports = container.get("ct")
+    if isinstance(reports, list):
+        candidates.extend(
+            ("b.ct[].co", report.get("co"))
+            for report in reports
+            if isinstance(report, dict)
+        )
+
+    paths: list[str] = []
+    for path, encoded in candidates:
+        if not isinstance(encoded, str):
+            continue
+        try:
+            frame = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            continue
+        if len(frame) >= 4 and modbus_crc(frame[:-2]) == int.from_bytes(frame[-2:], "little"):
+            paths.append(path)
+    return nul_prefixed, paths
+
+
+def safe_payload_shape(payload: bytes) -> str:
+    """Describe JSON keys and value types without exposing any values."""
+    try:
+        document = json.loads(payload.lstrip(b"\x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "invalid-json"
+    items: list[str] = []
+
+    def visit(value: Any, path: str, depth: int) -> None:
+        if len(items) >= 40 or depth > 4:
+            return
+        if isinstance(value, dict):
+            items.append(f"{path or 'root'}=object({len(value)})")
+            for key, child in value.items():
+                safe_key = key if isinstance(key, str) and len(key) <= 24 else "[key]"
+                visit(child, f"{path}.{safe_key}" if path else safe_key, depth + 1)
+        elif isinstance(value, list):
+            items.append(f"{path}=array({len(value)})")
+            if value:
+                visit(value[0], f"{path}[]", depth + 1)
+        elif isinstance(value, str):
+            items.append(f"{path}=string({len(value)})")
+        elif isinstance(value, bool):
+            items.append(f"{path}=boolean")
+        elif value is None:
+            items.append(f"{path}=null")
+        elif isinstance(value, (int, float)):
+            items.append(f"{path}=number")
+        else:
+            items.append(f"{path}=other")
+
+    visit(document, "", 0)
+    return ",".join(items)
+
+
+def payload_scalar_map(payload: bytes) -> dict[str, Any]:
+    """Extract protocol scalars for ephemeral comparison; never log values."""
+    try:
+        document = json.loads(payload.lstrip(b"\x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    scalars: dict[str, Any] = {}
+
+    def visit(value: Any, path: str, depth: int) -> None:
+        if depth > 4:
+            return
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if not isinstance(key, str) or len(key) > 24:
+                    continue
+                visit(child, f"{path}.{key}" if path else key, depth + 1)
+        elif isinstance(value, (str, int, float, bool)) or value is None:
+            scalars[path] = value
+
+    visit(document, "", 0)
+    # The Modbus command is already decoded separately and must not participate
+    # in envelope-counter comparison.
+    scalars.pop("b.ci", None)
+    return scalars
+
+
+def safe_scalar_changes(previous: dict[str, Any], current: dict[str, Any]) -> str:
+    changes: list[str] = []
+    unchanged: list[str] = []
+    for path in sorted(previous.keys() & current.keys()):
+        before, after = previous[path], current[path]
+        if before == after:
+            unchanged.append(path)
+        elif (
+            isinstance(before, (int, float))
+            and not isinstance(before, bool)
+            and isinstance(after, (int, float))
+            and not isinstance(after, bool)
+        ):
+            changes.append(f"{path}=numeric-delta({after - before:+g})")
+        elif isinstance(before, str) and isinstance(after, str):
+            if before.isdigit() and after.isdigit():
+                changes.append(f"{path}=digit-string-delta({int(after) - int(before):+d})")
+            elif re.fullmatch(r"\d{2}:\d{2}:\d{2}", before) and re.fullmatch(
+                r"\d{2}:\d{2}:\d{2}", after
+            ):
+                before_seconds = sum(
+                    value * factor for value, factor in zip(map(int, before.split(":")), (3600, 60, 1))
+                )
+                after_seconds = sum(
+                    value * factor for value, factor in zip(map(int, after.split(":")), (3600, 60, 1))
+                )
+                delta = (after_seconds - before_seconds) % 86400
+                changes.append(f"{path}=clock-HH:MM:SS-delta(+{delta}s)")
+            else:
+                before_pattern = "".join(
+                    "D" if char.isdigit() else "L" if char.isalpha() else char for char in before
+                )
+                after_pattern = "".join(
+                    "D" if char.isdigit() else "L" if char.isalpha() else char for char in after
+                )
+                changes.append(f"{path}=string-pattern({before_pattern}->{after_pattern})")
+        else:
+            changes.append(f"{path}=type-or-value-changed")
+    for path in sorted(previous.keys() ^ current.keys()):
+        changes.append(f"{path}=added-or-removed")
+    return "changed:" + (",".join(changes) or "none") + "; unchanged:" + ",".join(unchanged)
+
+
 def response_words_little_endian(frame: bytes) -> list[int] | None:
     if len(frame) < 5 or frame[1] != 3:
         return None
@@ -161,6 +306,54 @@ class SensorDefinition:
     unit: str | None
     device_class: str | None
     state_class: str | None
+
+
+@dataclass(frozen=True)
+class ReadRequestTemplate:
+    """In-memory copy of a vendor read envelope with private fields untouched."""
+
+    header: int
+    topic: str
+    document: dict[str, Any]
+    nul_prefixed: bool
+
+    def packet_for(self, register: int, count: int) -> bytes:
+        # Only function 03 is constructed here.  The fixed allow-list prevents
+        # this mechanism from ever becoming an arbitrary Modbus command path.
+        if (register, count) != (0x1195, 21):
+            raise ValueError("read block is not allow-listed")
+        frame_without_crc = bytes((5, 3)) + register.to_bytes(2, "big") + count.to_bytes(2, "big")
+        frame = frame_without_crc + modbus_crc(frame_without_crc).to_bytes(2, "little")
+        document = json.loads(json.dumps(self.document))
+        document["b"]["ci"] = base64.b64encode(frame).decode("ascii")
+        payload = json.dumps(document, separators=(",", ":")).encode()
+        if self.nul_prefixed:
+            payload = b"\x00" + payload
+        topic = self.topic.encode()
+        body = len(topic).to_bytes(2, "big") + topic + payload
+        return bytes((self.header,)) + encode_remaining_length(len(body)) + body
+
+
+def read_request_template(packet: bytes) -> ReadRequestTemplate | None:
+    decoded = decode_publish(packet)
+    if decoded is None:
+        return None
+    topic, payload = decoded
+    # Reusing packet identifiers would be unsafe.  The observed RWB1 service
+    # requests use QoS 0, which has no MQTT packet identifier.
+    if ((packet[0] >> 1) & 0x03) != 0:
+        return None
+    nul_prefixed = payload.startswith(b"\x00")
+    try:
+        document = json.loads(payload.lstrip(b"\x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(document, dict):
+        return None
+    container = document.get("b")
+    if not isinstance(container, dict) or not isinstance(container.get("ci"), str):
+        return None
+    return ReadRequestTemplate(packet[0] & 0x3F, topic, document, nul_prefixed)
 
 
 SENSORS = (
@@ -266,7 +459,7 @@ class LocalMQTTPublisher:
                 "value_template": "{{ value_json.%s }}" % sensor.key,
                 "origin": {
                     "name": "EASUN MQTT Bridge",
-                    "sw_version": "0.1.0",
+                    "sw_version": "0.2.1",
                 },
                 "device": {
                     "identifiers": ["easun_mqtt_bridge"],
@@ -291,38 +484,65 @@ class TelemetryObserver:
     def __init__(self, local_publisher: LocalMQTTPublisher | None = None) -> None:
         self.local_publisher = local_publisher
         self.latest_state: dict[str, Any] = {}
-        self.pending_reads: deque[tuple[int, int, float]] = deque(maxlen=32)
+        self.pending_reads: deque[tuple[int, int, float, bool]] = deque(maxlen=32)
+        self.read_template: ReadRequestTemplate | None = None
+        self.one_shot_attempted = False
+        self.previous_request_scalars: dict[str, Any] | None = None
 
-    def packet(self, direction: str, packet: bytes) -> None:
+    def packet(self, direction: str, packet: bytes) -> bool:
         packet_type = packet[0] >> 4
         if packet_type == 1:
             LOGGER.info("MQTT CONNECT observed (%s); credentials intentionally hidden", direction)
-            return
+            return False
         decoded = decode_publish(packet)
         if decoded is None:
-            return
+            return False
         topic, payload = decoded
         frames = extract_modbus_frames(payload)
         if not frames:
-            return
+            return False
         LOGGER.info("MQTT %s: %d valid Modbus frame(s) on %s", direction, len(frames), safe_topic(topic))
+        if direction == "upstream":
+            nul_prefixed, paths = modbus_frame_paths(payload)
+            LOGGER.info(
+                "Safe request envelope: nul_prefix=%s frame_paths=%s",
+                "yes" if nul_prefixed else "no",
+                ",".join(paths) if paths else "unknown",
+            )
+            LOGGER.info("Safe request shape: %s", safe_payload_shape(payload))
+            current_scalars = payload_scalar_map(payload)
+            if self.previous_request_scalars is not None:
+                LOGGER.info(
+                    "Safe request comparison: %s",
+                    safe_scalar_changes(self.previous_request_scalars, current_scalars),
+                )
+            self.previous_request_scalars = current_scalars
+        suppress = False
         for frame in frames:
-            self._observe_frame(direction, frame)
+            suppress = self._observe_frame(direction, frame) or suppress
+        if direction == "upstream" and any(frame[1] == 3 for frame in frames):
+            template = read_request_template(packet)
+            if template is not None:
+                self.read_template = template
+        return suppress
 
-    def _observe_frame(self, direction: str, frame: bytes) -> None:
+    def _observe_frame(self, direction: str, frame: bytes) -> bool:
         function = frame[1]
         if function == 3 and direction == "downstream":
             words = response_words_little_endian(frame)
             if words is None:
-                return
-            correlated_register = self._match_pending_read(len(words))
-            if correlated_register is None:
+                return False
+            correlation = self._match_pending_read(len(words))
+            if correlation is None:
                 LOGGER.info("Telemetry block received: %d words", len(words))
+                local_read = False
             else:
+                correlated_register, local_read = correlation
                 LOGGER.info(
-                    "Modbus read response: register=0x%04X words=%s",
+                    "Modbus read response: register=0x%04X words=%s source=%s",
                     correlated_register,
                     words,
+                    "local" if local_read else "cloud",
                 )
             if len(words) == 21:
                 self.latest_state.update(
@@ -355,25 +575,32 @@ class TelemetryObserver:
                             retain=True,
                         )
                     )
+            return local_read
         elif function in (3, 6) and len(frame) >= 8:
             register = int.from_bytes(frame[2:4], "big")
             value = int.from_bytes(frame[4:6], "big")
             operation = "read" if function == 3 else "write"
             LOGGER.info("Modbus %s request: register=0x%04X value=%d", operation, register, value)
             if function == 3 and direction == "upstream":
-                self.pending_reads.append((register, value, time.monotonic()))
+                self.pending_reads.append((register, value, time.monotonic(), False))
+        return False
 
-    def _match_pending_read(self, word_count: int) -> int | None:
+    def add_local_read(self, register: int, count: int) -> None:
+        self.pending_reads.append((register, count, time.monotonic(), True))
+
+    def has_pending_local_read(self) -> bool:
+        now = time.monotonic()
+        return any(local and now - created <= 10 for _, _, created, local in self.pending_reads)
+
+    def _match_pending_read(self, word_count: int) -> tuple[int, bool] | None:
         now = time.monotonic()
         while self.pending_reads and now - self.pending_reads[0][2] > 10:
             self.pending_reads.popleft()
-        if not self.pending_reads:
-            return None
-        register, expected_words, _ = self.pending_reads[0]
-        if expected_words != word_count:
-            return None
-        self.pending_reads.popleft()
-        return register
+        for index, (register, expected_words, _, local) in enumerate(self.pending_reads):
+            if expected_words == word_count:
+                del self.pending_reads[index]
+                return register, local
+        return None
 
 
 async def relay(
@@ -384,7 +611,6 @@ async def relay(
     try:
         while data := await reader.read(65536):
             parser.feed(data)
-            writer.write(data)
             await writer.drain()
     finally:
         if not writer.is_closing():
@@ -397,6 +623,7 @@ async def handle_client(
     upstream_host: str,
     upstream_port: int,
     observer: TelemetryObserver,
+    poll_interval: int | None,
 ) -> None:
     peer = downstream_writer.get_extra_info("peername")
     LOGGER.info("Datalogger connection accepted from %s", peer[0] if peer else "unknown")
@@ -407,12 +634,47 @@ async def handle_client(
         downstream_writer.close()
         await downstream_writer.wait_closed()
         return
-    down_parser = MQTTStreamParser(lambda packet: observer.packet("downstream", packet))
-    up_parser = MQTTStreamParser(lambda packet: observer.packet("upstream", packet))
+    downstream_lock = asyncio.Lock()
+
+    def forward_downstream(packet: bytes) -> None:
+        if not observer.packet("downstream", packet):
+            upstream_writer.write(packet)
+
+    def forward_upstream(packet: bytes) -> None:
+        observer.packet("upstream", packet)
+        downstream_writer.write(packet)
+
+    down_parser = MQTTStreamParser(forward_downstream)
+    up_parser = MQTTStreamParser(forward_upstream)
+
+    async def active_poller() -> None:
+        assert poll_interval is not None
+        while observer.read_template is None:
+            await asyncio.sleep(0.2)
+        if poll_interval == 0 and observer.one_shot_attempted:
+            return
+        # Let the original cloud request complete before the first local read.
+        await asyncio.sleep(2.0)
+        while not downstream_writer.is_closing():
+            if not observer.has_pending_local_read():
+                packet = observer.read_template.packet_for(0x1195, 21)
+                if poll_interval == 0:
+                    observer.one_shot_attempted = True
+                observer.add_local_read(0x1195, 21)
+                async with downstream_lock:
+                    downstream_writer.write(packet)
+                    await downstream_writer.drain()
+                LOGGER.info("Active read-only telemetry request sent")
+            if poll_interval == 0:
+                return
+            await asyncio.sleep(poll_interval)
+
     tasks = {
         asyncio.create_task(relay(downstream_reader, upstream_writer, down_parser)),
         asyncio.create_task(relay(upstream_reader, downstream_writer, up_parser)),
     }
+    if poll_interval is not None:
+        tasks.add(asyncio.create_task(active_poller()))
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
@@ -437,7 +699,7 @@ async def run(args: argparse.Namespace) -> None:
     observer = TelemetryObserver(local_publisher)
     server = await asyncio.start_server(
         lambda reader, writer: handle_client(
-            reader, writer, args.upstream_host, args.upstream_port, observer
+            reader, writer, args.upstream_host, args.upstream_port, observer, None
         ),
         args.listen_host,
         args.listen_port,

@@ -8,6 +8,11 @@ from easun_bridge.easun_bridge import (
     decode_publish,
     encode_remaining_length,
     extract_modbus_frames,
+    modbus_frame_paths,
+    read_request_template,
+    safe_payload_shape,
+    payload_scalar_map,
+    safe_scalar_changes,
     modbus_crc,
     response_words_little_endian,
     safe_topic,
@@ -48,6 +53,40 @@ class BridgeTests(unittest.TestCase):
         frame = with_crc(bytes.fromhex("05 03 02 03 00"))
         payload = b"\x00" + json.dumps({"b": {"co": base64.b64encode(frame).decode()}}).encode()
         self.assertEqual([frame], extract_modbus_frames(payload))
+        self.assertEqual((True, ["b.co"]), modbus_frame_paths(payload))
+
+    def test_safe_envelope_reports_only_frame_paths(self):
+        frame = with_crc(bytes.fromhex("05 03 11 B7 00 01"))
+        payload = json.dumps(
+            {
+                "device_identifier_that_must_not_be_logged": "private-value",
+                "b": {"ci": base64.b64encode(frame).decode()},
+            }
+        ).encode()
+        nul_prefixed, paths = modbus_frame_paths(payload)
+        self.assertFalse(nul_prefixed)
+        self.assertEqual(["b.ci"], paths)
+
+    def test_safe_shape_never_contains_values(self):
+        payload = json.dumps(
+            {"private_identifier": "must-not-appear", "b": {"ci": "secret-frame"}}
+        ).encode()
+        shape = safe_payload_shape(payload)
+        self.assertIn("private_identifier=string(15)", shape)
+        self.assertIn("b.ci=string(12)", shape)
+        self.assertNotIn("must-not-appear", shape)
+        self.assertNotIn("secret-frame", shape)
+
+    def test_safe_comparison_reports_only_change_metadata(self):
+        previous = payload_scalar_map(b'{"i":100,"s":"123456789","t":"11:00:01","b":{"ci":"one","no":4}}')
+        current = payload_scalar_map(b'{"i":101,"s":"123456799","t":"11:00:06","b":{"ci":"two","no":4}}')
+        comparison = safe_scalar_changes(previous, current)
+        self.assertIn("i=numeric-delta(+1)", comparison)
+        self.assertIn("s=digit-string-delta(+10)", comparison)
+        self.assertIn("t=clock-HH:MM:SS-delta(+5s)", comparison)
+        self.assertIn("b.no", comparison)
+        self.assertNotIn("123456789", comparison)
+        self.assertNotIn("123456799", comparison)
 
     def test_bad_crc_is_rejected(self):
         frame = bytes.fromhex("05 03 02 01 00 00 00")
@@ -84,6 +123,28 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(1, len(observer.pending_reads))
         observer._observe_frame("downstream", response)
         self.assertEqual(0, len(observer.pending_reads))
+
+    def test_allowlisted_read_packet_uses_captured_envelope(self):
+        original = with_crc(bytes.fromhex("05 03 11 D1 00 01"))
+        payload = b"\x00" + json.dumps(
+            {"request": "kept-in-memory", "b": {"ci": base64.b64encode(original).decode()}}
+        ).encode()
+        template = read_request_template(publish("dtu/private/sub/service/dev_rpc", payload))
+        self.assertIsNotNone(template)
+        generated = template.packet_for(0x1195, 21)
+        topic, generated_payload = decode_publish(generated)
+        self.assertEqual("dtu/private/sub/service/dev_rpc", topic)
+        self.assertEqual(
+            [with_crc(bytes.fromhex("05 03 11 95 00 15"))],
+            extract_modbus_frames(generated_payload),
+        )
+
+    def test_arbitrary_active_read_is_rejected(self):
+        original = with_crc(bytes.fromhex("05 03 11 D1 00 01"))
+        payload = json.dumps({"b": {"ci": base64.b64encode(original).decode()}}).encode()
+        template = read_request_template(publish("safe/topic", payload))
+        with self.assertRaises(ValueError):
+            template.packet_for(0x138C, 1)
 
 
 if __name__ == "__main__":

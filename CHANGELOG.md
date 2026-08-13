@@ -4,6 +4,16 @@ Todas as alterações relevantes deste projeto serão documentadas neste ficheir
 
 ## [Unreleased]
 
+### Alterado
+
+- Diagnóstico estrutural seguro do envelope MQTT para preparar futuras
+  consultas Modbus exclusivamente de leitura, sem registar conteúdo,
+  identificadores ou credenciais.
+- Diagnóstico de interoperabilidade confirmou que os pedidos remotos incluem
+  dois valores alfanuméricos variáveis gerados pela cloud. O ensaio de uma
+  consulta local foi rejeitado pelo RWB1 e a opção experimental foi retirada
+  da configuração para impedir ativação acidental.
+
 ### Adicionado
 
 - Proxy MQTT transparente e passivo para o datalogger Solar Plug-RWB1.

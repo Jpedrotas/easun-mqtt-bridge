@@ -30,5 +30,5 @@ if bashio::config.true 'verbose'; then
     ARGS+=(--verbose)
 fi
 
-bashio::log.info "Starting passive EASUN MQTT bridge"
+bashio::log.info "Starting EASUN MQTT bridge"
 exec python3 /app/easun_bridge.py "${ARGS[@]}"
