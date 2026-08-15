@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-08-15
+
+- Added a read-only ESPHome external component for direct RWB1 Bluetooth LE
+  telemetry on ESP32-C3, with automatic `SSL_` discovery and no fixed MAC.
+- Added all 15 confirmed telemetry sensors, CRC validation and a configurable
+  activity LED that blinks on communication.
+- Validated repeated two-second polling on the confirmed hardware using ESPHome
+  2026.7.4 and ESP-IDF 5.5.5.
+- Added a public configuration, secrets template, diagnostic build and privacy
+  guidance. No device-specific capture, address, identifier or key is included.
+- Documented how to copy the DTU ID from the vendor application's Device
+  Information page and distinguish it from the SN, BLE name and MAC.
+- Standardized the new ESPHome component, firmware logs, CLI tools and public
+  documentation in English for international use.
+- Added a clear notice that this is an unofficial community project with no
+  vendor affiliation or endorsement.
+
 ## [0.3.3] - 2026-08-13
 
 - Clarified intentional IPv4 octet splitting in the OpenWrt helper and made

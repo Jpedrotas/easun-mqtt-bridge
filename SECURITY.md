@@ -15,3 +15,9 @@ included in app backups, so backups must be protected as private data.
 
 The bridge never writes inverter registers. Any future control feature must be
 optional, restricted by an explicit register allow-list, and covered by tests.
+
+The ESPHome component stores no identifier in source control, but its private
+`dtu_id` secret is used at compile time to derive the local Bluetooth protocol
+key. Treat `secrets.yaml`, ESPHome build directories, diagnostic bundles and
+compiled firmware images as sensitive. Public issues should contain only
+sanitized log lines and must omit Bluetooth addresses and telemetry values.
