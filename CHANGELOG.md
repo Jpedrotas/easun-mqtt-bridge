@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.1] - 2026-08-15
+
+- Reduced the production ESP32-C3 BLE scan duty cycle to allow reliable Wi-Fi
+  authentication on mesh and multi-access-point networks while retaining
+  automatic RWB1 discovery.
+- Documented ESP32-C3 Wi-Fi/Bluetooth radio coexistence behavior.
+
 ## [0.4.0] - 2026-08-15
 
 - Added a read-only ESPHome external component for direct RWB1 Bluetooth LE

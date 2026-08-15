@@ -32,6 +32,11 @@ repeated live reads on the confirmed test system. If another RWB1 revision is
 unstable or Wi-Fi/Bluetooth coexistence is poor, change the substitution to
 `5s`, `10s` or `30s` before assuming incompatibility.
 
+The production example deliberately uses a low-duty-cycle BLE scan. Wi-Fi and
+Bluetooth share the ESP32-C3 radio; continuous scanning can prevent Wi-Fi from
+authenticating on mesh or multi-access-point networks. The RWB1 is still
+discovered automatically, normally within a few seconds.
+
 Only one local BLE client may be able to connect at a time. Close the vendor
 application's Bluetooth Tool while ESPHome is connected. The RWB1's normal
 Wi-Fi/cloud path is separate from this local BLE connection.
