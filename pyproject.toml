@@ -1,6 +1,6 @@
 [project]
 name = "easun-mqtt-bridge"
-version = "0.4.0"
+version = "0.3.3"
 description = "Local read-only telemetry bridge for EASUN RWB1 dataloggers"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,12 +14,6 @@ classifiers = [
 
 [project.scripts]
 easun-mqtt-bridge = "easun_bridge.easun_bridge:main"
-
-[project.optional-dependencies]
-ble-tools = [
-  "bleak>=1.0,<2",
-  "cryptography>=45,<47",
-]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -11,6 +11,3 @@ dist/
 *.egg-info/
 captures/
 secrets.*
-.esphome/
-secrets.yaml
-!secrets.example.yaml

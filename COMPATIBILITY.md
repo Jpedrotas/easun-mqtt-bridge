@@ -26,10 +26,7 @@ policy used to distinguish confirmed observations from compatibility inferences.
 | Supervisor | Home Assistant Supervisor | 2026.07.5 | Confirmed during validation |
 | Local MQTT | Official Mosquitto Broker app | 7.1.0 | Confirmed and running during validation |
 | Bridge | EASUN MQTT Bridge | 0.3.3 | Passive proxy and two-second polling confirmed |
-| ESPHome BLE component | EASUN RWB1 BLE | 0.4.0 | Direct discovery, decryption and repeated two-second polling confirmed |
 | Vendor client | Sun House app / Siseli web platform | Exact app and web build versions not recorded | Used to trigger and compare cloud requests |
-| ESPHome BLE host | Generic ESP32-C3 development board | 4 MB flash; native USB Serial/JTAG; active-low GPIO8 LED | Direct BLE discovery, connection and read-only telemetry confirmed |
-| ESPHome | ESPHome with ESP-IDF | 2026.7.4 / ESP-IDF 5.5.5 | Build, USB installation and repeated two-second polling confirmed |
 
 ## Network infrastructure present during testing
 
@@ -106,8 +103,6 @@ not run on the original OpenWrt 19.07/firewall3 environment.
 - Other SMH III power ratings may use the Sumry family but remain unconfirmed.
 - Different RWB1 firmware may change the private request envelope or reject
   locally generated requests.
-- Direct ESPHome BLE was confirmed on one RWB1 revision. Other revisions and
-  simultaneous use of the vendor Bluetooth Tool remain unconfirmed.
 - Wi-Fi repeaters, mesh systems, and multiple routers can cause the datalogger
   to bypass the intended OpenWrt path.
 

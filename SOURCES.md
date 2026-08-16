@@ -5,7 +5,7 @@ MQTT Bridge. Sources are grouped by authority. A reference project can support a
 compatibility hypothesis but does not by itself prove compatibility with the
 tested inverter.
 
-Links and upstream repository revisions were checked on 2026-08-15.
+Links and upstream repository revisions were checked on 2026-08-13.
 
 ## Standards and official protocol documentation
 
@@ -29,14 +29,6 @@ Installed Home Assistant, OS, Supervisor, kernel, architecture, and Mosquitto ap
 versions in the compatibility matrix were queried directly from the private test
 system. No configuration export, token, credential, or diagnostic bundle is
 included in this repository.
-
-## ESPHome documentation
-
-| Source | Used for |
-|---|---|
-| [External Components](https://esphome.io/components/external_components/) | Loading the public `rwb1_ble` component from this repository |
-| [ESP32 Bluetooth Low Energy Tracker](https://esphome.io/components/esp32_ble_tracker/) | BLE scanning and ESP32 resource considerations |
-| [ESP32 Bluetooth Low Energy Client](https://esphome.io/components/esp32_ble_client/) | Persistent GATT client lifecycle and notifications/indications |
 
 ## OpenWrt documentation
 
@@ -78,11 +70,9 @@ this bridge.
 ## Primary evidence from the tested equipment
 
 The final register assignments, response byte order, MQTT envelope behavior,
-request correlation, BLE framing/cryptography and active-polling behavior were
-validated against private captures and live observations from the exact test
-system. Direct ESP32-C3 BLE polling was validated at two-second cadence with CRC
-checking. This primary evidence has greater weight for this project than
-similarity to external register maps.
+request correlation, and active-polling behavior were validated against private
+captures and live observations from the exact test system. This primary evidence
+has greater weight for this project than similarity to external register maps.
 
 For privacy and security, the repository does **not** contain:
 

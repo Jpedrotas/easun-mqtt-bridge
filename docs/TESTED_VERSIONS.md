@@ -22,8 +22,6 @@ The protocol investigation and first working redirect were performed with:
 | Home Assistant architecture/kernel | `rpi4-64` / `aarch64`; `6.18.34-haos-raspi` |
 | Mosquitto Broker app | 7.1.0 |
 | Bridge release | 0.3.3 |
-| ESPHome BLE component release | 0.4.0 |
-| ESPHome direct BLE | ESPHome 2026.7.4 / ESP-IDF 5.5.5 on ESP32-C3 (4 MB) |
 
 The wider test network also included a Vodafone ISP gateway, a TP-Link Deco
 mesh, an Ethernet switch, a TP-Link Archer C6, and a second Archer C20 running
@@ -93,8 +91,6 @@ When reporting compatibility, include only non-sensitive details:
 - Home Assistant Core, OS, and Supervisor versions;
 - inverter and datalogger model/type;
 - whether passive mode and two-second polling both worked.
-- ESP32 model, flash size, ESPHome version and whether direct BLE polling worked
-  at two seconds.
 
 Do not include public IP addresses, private topology details, MAC addresses,
 serial numbers, MQTT topics, credentials, or packet captures.

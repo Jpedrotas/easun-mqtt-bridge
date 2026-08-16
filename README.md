@@ -1,18 +1,9 @@
 # EASUN MQTT Bridge
 
-> Unofficial community project. It is not affiliated with or endorsed by EASUN,
-> the RWB1 manufacturer, or the vendor application provider. Product names and
-> trademarks belong to their respective owners.
-
 Experimental transparent MQTT proxy for the RWB1 datalogger used by some EASUN
 iSolar SMH III inverters. It forwards the original connection to the vendor
 cloud, validates and decodes Modbus RTU frames, and publishes confirmed
 telemetry to a local MQTT broker using Home Assistant MQTT Discovery.
-
-The repository also contains a simpler, independently validated ESPHome option:
-an ESP32-C3 connects directly to the RWB1 over Bluetooth LE and publishes the
-same confirmed telemetry block to Home Assistant. This mode needs no OpenWrt
-traffic redirection or cloud interception.
 
 The vendor app can remain operational. The bridge never stores or displays the
 datalogger MQTT credentials and does not support parameter writes. Optional
@@ -25,19 +16,6 @@ generated requests and their responses are not forwarded to the cloud.
 > used as the only monitoring or control source.
 
 ## Quick start
-
-Choose one installation mode:
-
-- **ESPHome Bluetooth (simplest):** use an ESP32-C3 near the RWB1 and follow the
-  [`ESPHome quick start`](esphome/README.md). Automatic discovery means no BLE
-  MAC address is entered. The supplied example supports two-second updates and
-  explains how to copy the DTU ID from the vendor application's **Device
-  Information** page.
-- **Wi-Fi/MQTT bridge:** use the Home Assistant app and OpenWrt interception
-  described below. This is useful when an ESP32 cannot be placed within BLE
-  range.
-
-### Wi-Fi/MQTT bridge
 
 [![Open the Home Assistant app store and add this repository](https://my.home-assistant.io/badges/supervisor_store.svg)](https://my.home-assistant.io/redirect/supervisor_store/?repository_url=https%3A%2F%2Fgithub.com%2Fjpedrotas%2Feasun-mqtt-bridge)
 
@@ -61,8 +39,7 @@ and should initially be applied temporarily so they can be removed easily.
 ## Local testing
 
 ```powershell
-python -m pip install -e ".[ble-tools]"
-python -m unittest discover -v
+python .\test_easun_bridge.py
 python .\easun_bridge\easun_bridge.py --listen-port 18830 --upstream-host <cloud-broker>
 ```
 
@@ -99,11 +76,7 @@ permissions and may be included in Home Assistant app backups.
 - Only the read block starting at `0x1195` is allow-listed for local polling.
 - Compatibility with other dataloggers or firmware revisions must not be
   assumed.
-- The Wi-Fi/MQTT bridge needs an initial cloud connection to learn its private
-  request envelope; the ESPHome Bluetooth mode instead needs the DTU ID stored
-  in ESPHome secrets.
-- A vendor Bluetooth tool and the ESP32-C3 may not be able to hold local BLE
-  connections simultaneously.
+- An initial cloud connection is required to learn the private request envelope.
 - OpenWrt routing rules are installation-specific and must restrict redirection
   to the datalogger and the vendor MQTT broker.
 
@@ -126,8 +99,6 @@ Tested hardware is listed without serial numbers or other private data in
 
 - Never submit packet captures, credentials, MAC addresses, device identifiers,
   or complete MQTT topics.
-- Never commit `secrets.yaml`, ESPHome build output, DTU IDs or compiled firmware
-  containing a real DTU-derived key.
 - Start in passive mode and keep a local way to remove the traffic redirection.
 - The project does not implement Modbus writes.
 
