@@ -31,16 +31,14 @@ ota:
     password: !secret ota_password
 
 external_components:
-  - source: github://jpedrotas/easun-mqtt-bridge@v0.4.1
+  - source: github://jpedrotas/easun-mqtt-bridge@v0.4.0
     components: [rwb1_ble]
     refresh: 1d
 
 esp32_ble_tracker:
   scan_parameters:
-    # A low scan duty cycle leaves enough shared radio time for reliable Wi-Fi
-    # association on the single-core ESP32-C3.
-    interval: 320ms
-    window: 30ms
+    interval: 1100ms
+    window: 1100ms
     active: true
 
 rwb1_ble:
