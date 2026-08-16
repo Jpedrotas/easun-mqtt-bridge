@@ -2,13 +2,6 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.4.2] - 2026-08-16
-
-- Delayed BLE scanning on single-core ESP32-C3 boards until the native API is
-  connected, following the official ESPHome Wi-Fi/BLE coexistence workaround.
-- Stop BLE scanning again after the last API client disconnects so Wi-Fi can
-  recover without radio contention.
-
 ## [0.4.1] - 2026-08-15
 
 - Reduced the production ESP32-C3 BLE scan duty cycle to allow reliable Wi-Fi

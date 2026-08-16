@@ -25,25 +25,13 @@ wifi:
 api:
   encryption:
     key: !secret api_encryption_key
-  # ESP32-C3 is single-core and shares radio time between Wi-Fi and BLE.
-  # Start BLE only after Wi-Fi and the native API are fully connected.
-  on_client_connected:
-    - esp32_ble_tracker.start_scan:
-        continuous: true
-  on_client_disconnected:
-    - if:
-        condition:
-          not:
-            api.connected:
-        then:
-          - esp32_ble_tracker.stop_scan:
 
 ota:
   - platform: esphome
     password: !secret ota_password
 
 external_components:
-  - source: github://jpedrotas/easun-mqtt-bridge@v0.4.2
+  - source: github://jpedrotas/easun-mqtt-bridge@v0.4.1
     components: [rwb1_ble]
     refresh: 1d
 
@@ -54,7 +42,6 @@ esp32_ble_tracker:
     interval: 320ms
     window: 30ms
     active: true
-    continuous: false
 
 rwb1_ble:
   dtu_id: !secret rwb1_dtu_id
